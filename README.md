@@ -1,0 +1,4 @@
+Queryable
+=========
+
+Linq for Javascript.
