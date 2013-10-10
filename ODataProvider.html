@@ -1,0 +1,112 @@
+<html>
+    <body>
+        <script src="Queryable.js"></script>
+        <script>
+            
+            (function(){
+            
+                var MockAjax = function(){
+                    var self = this;
+                    
+                    self.GET = function(url){
+                        return new BoostJS.Future(function(setValue, setError){
+                            setTimeout(function(){
+                                // Just send back nothing.
+                                // Create your own ajax provider and send back results based on the url.
+                                
+                                console.log(url);
+                                setValue({data: []});
+                                
+                            }, 0);
+                        });    
+                    };
+                };
+                
+                var ODataProvider = function(ajaxProvider){
+                    var self = this;
+                    
+                    var Types = [];
+                    var endPoints = [];
+                    
+                    BoostJS.QueryProvider.call(self);
+                    
+                    self.execute = self.toArray = function(queryable){
+                        return new BoostJS.Future(function(setValue, setError){
+                            var Type = queryable.Type;
+                            
+                            var index = Types.indexOf(Type);
+                            var uri;
+                            
+                            if (index >= 0){
+                                uri = endPoints[index];
+                            }
+                            
+                            if (!uri){
+                                throw new Error("Provider doesn't support querying that Type.");
+                            } else {
+                                var odataString = BoostJS.odata.toString(queryable);
+                                
+                                var url = uri+"?"+odataString;
+                                
+                                ajaxProvider.GET(url).then(function(response){
+                                    var result = [];
+                                    
+                                    response.data.forEach(function(item){
+                                        var instance = new Type();
+                                        Object.keys(item).forEach(function(key){
+                                            instance[key] = item[key];    
+                                        });
+                                    });
+                                    
+                                    setValue(result);
+                                    
+                                }).ifError(setError);
+                            }
+                        });
+                    };
+                    
+                    self.addEndPoint = function(Type, baseUri){
+                        Types.push(Type);
+                        endPoints.push(baseUri);
+                    };
+                    
+                    self.removeEndPoint = function(Type){
+                        var index = Types.indexOf(Type);
+                        if (index >= 0){
+                            Types.splice(index, 1);
+                            endPoints.splice(index, 1);
+                        }
+                    };
+                };
+                
+                BoostJS.extend(ODataProvider, BoostJS.QueryProvider);
+                
+                
+                var Person = function(){
+                    this.firstName = null;
+                    this.lastName = null;
+                    this.age = null;
+                };
+                
+                var provider = new ODataProvider(new MockAjax());
+                provider.addEndPoint(Person, "https://www.someurl.com/People/");
+                
+                
+                var queryable = new BoostJS.Queryable(Person);
+                queryable.provider = provider;
+                
+                queryable = queryable.where(function(p){
+                    return this.or(this.and(p.firstName.equals("Jared"), p.lastName.equals("Barnes")), p.age.greaterThan(30));    
+                }).take(1).skip(5).orderByDesc(function(p){
+                    return p.age;
+                }).toArray().then(function(a){
+                    console.log(a);
+                });
+                
+                
+                
+            }());
+            
+        </script>
+    </body>
+</html>
